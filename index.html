@@ -108,6 +108,7 @@ input,textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(-
 </div>
 <button class="btn" onclick="openForm()">＋ أوردر جديد</button>
 <div style="display:flex;align-items:center;gap:8px;margin:-6px 0 12px;font-size:13px;color:var(--mu);background:var(--card);padding:8px 10px;border-radius:10px"><span>رقم الأوردر القادم:</span><input id="startNo" type="text" style="width:110px;padding:6px" onchange="setStart(this.value)"></div>
+<input id="ordQ" placeholder="🔍 ابحث بالاسم أو الرقم أو العنوان" oninput="render()" style="margin-bottom:10px">
 <div class="tabs">
   <button id="t_all" class="on" onclick="setTab('all')">الكل</button>
   <button id="t_open" onclick="setTab('open')">مفتوح</button>
@@ -240,7 +241,7 @@ function render(){
   orders.forEach(function(o){tot+=o.total;if(o.st=='done'&&rem(o)>0)rm+=rem(o);
     if(o.st=='open'){op++;dep+=o.dep+o.pay2}});
   $('sTotal').textContent=f(tot);$('sDep').textContent=f(dep);$('sOpen').textContent=op;$('startNo').value=nextNo();applyTh();renderHome();$('sRem').textContent=f(rm);
-  var l=orders.filter(function(o){if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&((+o.dep||0)+(+o.pay2||0))>0;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
+  var q=(($('ordQ')||{}).value||'').trim().toLowerCase();var l=orders.filter(function(o){if(q&&(o.name+' '+(o.phone||'')+' '+(o.addr||'')+' '+lab(o)).toLowerCase().indexOf(q)<0)return false;if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&((+o.dep||0)+(+o.pay2||0))>0;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
   $('list').innerHTML=l.length?l.map(function(o){
     var done=o.st=='done',bad=done&&rem(o)>0,good=done&&rem(o)<=0;return '<div class="o'+(bad?' red':good?' grn':'')+'" onclick="openForm('+o.id+')"><div class="t"><span class="n">#'+esc(lab(o))+'</span><b style="flex:1">'+esc(o.name||'بدون اسم')+'</b>'+
     (o.img?'<img src="'+o.img+'" onclick="event.stopPropagation();showImg('+o.id+')">':'')+
@@ -772,7 +773,7 @@ async function delLive(wid,i){var k='live'+wid+'_'+i;if(cf!=k){cf=k;renderWk();r
  var p=(LIVE[wid]||{per:[]}).per[i];if(p)await sb.from('checkins').delete().in('id',p.ids);liveLoad()}
 async function liveEnd(wid){var lv=LIVE[wid];if(!lv||!lv.open)return;var w=wks.find(function(x){return x.id==wid});
  await sb.from('checkins').insert({worker_id:wid,worker_name:w?w.name:'',kind:'out'});liveLoad()}
-function tabLive(w){if(!(IS_OWNER||PERM.att=='edit'))return '';
+function tabLive0(w){if(!(IS_OWNER||PERM.att=='edit'))return '';
  var lv=LIVE[w.id],r=sumW(w).r,per=lv?lv.per:[],open=lv&&lv.open;
  if(!per.length&&!open)return '<div class="s" style="margin-bottom:10px"><small>⏱️ التسجيلات المباشرة من الموظفين</small><div style="color:var(--mu);font-size:13px;margin-top:6px">لا توجد تسجيلات بعد.</div></div>';
  var by={},tot=0;per.forEach(function(p,i){(by[p.date]=by[p.date]||[]).push({p:p,i:i});tot+=p.h});
@@ -928,11 +929,23 @@ function applyColors(){var R=document.documentElement.style;var pr=th.pr||th.col
  set('--card',th.card||'');set('--tx',th.tx||'')}
 function setCol(k,v){th[k]=v;saveTh()}
 function resetCols(){th.col='';th.pr='';th.bg='';th.card='';th.tx='';saveTh();openTh()}
+/* ===== إدخال يدوي للحضور والانصراف (المالك) ===== */
+var mDate=today(),mT=600;
+function mtm(d){if(d==720)mT=(mT+720)%1440;else if(d==60||d==-60){var base=mT>=720?720:0,hh=((Math.floor(mT/60)%12)+d/60+12)%12;mT=base+hh*60+mT%60}else mT=Math.floor(mT/60)*60+((mT%60)+d+60)%60;renderWk()}
+function mStep(){var h=Math.floor(mT/60)%24,pm=h>=12,b=function(d,s){return '<button onclick="mtm('+d+')" style="background:var(--pr2);color:var(--pr);border:0;border-radius:8px;width:42px;height:34px">'+s+'</button>'};
+ return '<div class="tr" style="display:flex;align-items:center;justify-content:center;gap:6px;direction:ltr"><div style="display:flex;flex-direction:column;align-items:center;gap:2px">'+b(60,'▲')+'<span style="font-size:26px;font-weight:700;min-width:42px;text-align:center">'+(h%12||12)+'</span>'+b(-60,'▼')+'</div><span style="font-size:26px;font-weight:700">:</span><div style="display:flex;flex-direction:column;align-items:center;gap:2px">'+b(5,'▲')+'<span style="font-size:26px;font-weight:700;min-width:42px;text-align:center">'+String(mT%60).padStart(2,'0')+'</span>'+b(-5,'▼')+'</div><button onclick="mtm(720)" style="margin-inline-start:8px;background:var(--pr2);color:var(--pr);border:0;border-radius:8px;height:44px;padding:0 12px;font-size:16px;font-weight:700">'+(pm?'م':'ص')+'</button></div>'}
+function manualForm(){if(!IS_OWNER)return '';return '<div class="s" style="margin-bottom:10px"><small>✍️ إدخال يدوي: حضور أو انصراف (كل واحد لحاله)</small><label>التاريخ</label><input type="date" value="'+mDate+'" onchange="mDate=this.value"><div style="margin-top:8px">'+mStep()+'</div><div class="two" style="margin-top:10px"><button class="btn" style="margin:0" onclick="addManual(\'in\')">✅ إضافة حضور</button><button class="btn" style="margin:0;background:var(--rd)" onclick="addManual(\'out\')">🚪 إضافة انصراف</button></div></div>'}
+async function addManual(kind){if(!sb||!IS_OWNER)return;var w=W();if(!w)return;var d=(mDate||today()).split('-').map(Number);
+ var dt=new Date(d[0],d[1]-1,d[2],Math.floor(mT/60),mT%60);
+ var r=await sb.from('checkins').insert({worker_id:w.id,worker_name:w.name,kind:kind,ts:dt.toISOString()});
+ if(r.error){alert('تعذر الحفظ، حاول مرة ثانية');return}
+ await liveLoad();renderWk()}
+function tabLive(w){return manualForm()+tabLive0(w)}
 var swapFor=null;function lab(o){return o.no!=null&&o.no!==''?String(o.no):String(o.id)}
 function nextId(){return Date.now()}
 var th={};try{th=JSON.parse(localStorage.getItem('theme_v1')||'{}')}catch(e){th={}}
 function saveTh(){syQ('theme');try{localStorage.setItem('theme_v1',JSON.stringify(th))}catch(e){}applyTh()}
-function openTh(){$('tName').value=th.name||'';var cs=getComputedStyle(document.documentElement);var hx=function(v,d){v=(v||'').trim();return /^#[0-9a-f]{6}$/i.test(v)?v:d};$('cPr').value=hx(th.pr,'#0f6b57');$('cBg').value=hx(th.bg,'#f6f4ef');$('cCard').value=hx(th.card,'#ffffff');$('cTx').value=hx(th.tx,'#1d2a26');var C=['#0f6b57','#1d4ed8','#7c3aed','#c2410c','#be123c','#0f172a','#0e7490','#a16207'];$('sw').innerHTML=C.map(function(c){return '<button data-c="'+c+'" onclick="th.col=this.dataset.c;th.pr=0;saveTh()" style="width:38px;height:38px;border-radius:50%;border:2px solid var(--bd);background:'+c+'"></button>'}).join('');$('ov3').classList.add('on')}
+function openTh(){if(!IS_OWNER)return;$('tName').value=th.name||'';var cs=getComputedStyle(document.documentElement);var hx=function(v,d){v=(v||'').trim();return /^#[0-9a-f]{6}$/i.test(v)?v:d};$('cPr').value=hx(th.pr,'#0f6b57');$('cBg').value=hx(th.bg,'#f6f4ef');$('cCard').value=hx(th.card,'#ffffff');$('cTx').value=hx(th.tx,'#1d2a26');var C=['#0f6b57','#1d4ed8','#7c3aed','#c2410c','#be123c','#0f172a','#0e7490','#a16207'];$('sw').innerHTML=C.map(function(c){return '<button data-c="'+c+'" onclick="th.col=this.dataset.c;th.pr=0;saveTh()" style="width:38px;height:38px;border-radius:50%;border:2px solid var(--bd);background:'+c+'"></button>'}).join('');$('ov3').classList.add('on')}
 function applyTh(){var b=document.body;applyColors();
 var hd=$('hdr');if(th.logo){hd.style.backgroundImage='url('+th.logo+')';hd.classList.add('lg')}else{hd.style.backgroundImage='';hd.classList.remove('lg')}$('shopName').textContent=th.name||'Grid Homes'}
 function pickTh(inp,k,mx){var fl=inp.files[0];if(!fl)return;var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){var s=Math.min(1,mx/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);th[k]=c.toDataURL('image/webp',0.85);saveTh()};im.src=r.result};r.readAsDataURL(fl)}
@@ -958,7 +971,7 @@ function pickImg(inp){
   var r=new FileReader();
   r.onerror=function(){imgBusy=false;$('fMsg').textContent='⚠️ تعذر قراءة الصورة، جرّب صورة ثانية'};
   r.onload=function(){var im=new Image();
-    im.onerror=function(){imgBusy=false;$('fMsg').textContent='⚠️ تعذر فتح الصورة، جرّب صورة ثانية'};
+    im.onerror=function(){imgBusy=false;$('fMsg').textContent='⚠️ تعذر فتح الصورة. غالباً صيغتها HEIC وجوالك ما يقراها. اختر صورة بصيغة JPG، أو غيّر إعداد الكاميرا لـ"Most compatible" (JPEG)'};
     im.onload=function(){
       var m=800,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');
       c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
