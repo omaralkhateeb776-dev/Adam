@@ -103,6 +103,7 @@ input,textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(-
   <div class="s h"><small>مجمل الشغل (مجموع كل الأوردرات)</small><b id="sTotal">0</b></div>
   <div class="s" onclick="setTab('dep');$('list').scrollIntoView({behavior:'smooth'})" style="cursor:pointer"><small>العرابين الموجودة عندي 👆</small><b id="sDep">0</b></div>
   <div class="s" onclick="setTab('open');$('list').scrollIntoView({behavior:'smooth'})" style="cursor:pointer"><small>أوردرات مفتوحة 👆</small><b id="sOpen">0</b></div>
+    <div class="s" onclick="setTab('wait');$('list').scrollIntoView({behavior:'smooth'})" style="cursor:pointer"><small>في الانتظار (ما دخلت تنفيذ) 👆</small><b id="sWait">0</b></div>
   
   <div class="s" style="border:2px solid var(--rd)"><small>الديون عند العملاء (تم التسليم وعليه نقص)</small><b id="sRem" style="color:var(--rd)">0</b></div>
 </div>
@@ -115,6 +116,7 @@ input,textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(-
   <button id="t_done" onclick="setTab('done')">منتهي</button>
   <button id="t_debt" onclick="setTab('debt')">ديون</button>
   <button id="t_dep" onclick="setTab('dep')">عرابين</button>
+  <button id="t_wait" onclick="setTab('wait')">في الانتظار</button>
 </div>
 <div id="list"></div>
 
@@ -238,11 +240,12 @@ function v(i){return parseFloat($(i).value)||0}
 function rem(o){return o.total-o.dep-o.pay2}
 function isDelivered(o){if(o.st=='done')return true;return STG.some(function(s){return /تسليم/.test(s.name)&&o.stg&&o.stg[s.id]})}
 function render(){
-  var tot=0,dep=0,op=0,rm=0,pr=0;
+  var tot=0,dep=0,op=0,rm=0,pr=0,wt=0;
   orders.forEach(function(o){tot+=o.total;if(o.st=='done'&&rem(o)>0)rm+=rem(o);
-    if(o.st=='open'&&!isDelivered(o)){op++;dep+=(+o.dep||0)+(+o.pay2||0)}});
+    if(o.st=='open'&&!isDelivered(o)){op++;if(!o.ex){wt++;dep+=(+o.dep||0)+(+o.pay2||0)}}});
+  $('sWait').textContent=wt;
   $('sTotal').textContent=f(tot);$('sDep').textContent=f(dep);$('sOpen').textContent=op;$('startNo').value=nextNo();applyTh();renderHome();$('sRem').textContent=f(rm);
-  var q=(($('ordQ')||{}).value||'').trim().toLowerCase();var l=orders.filter(function(o){if(q&&(o.name+' '+(o.phone||'')+' '+(o.addr||'')+' '+lab(o)).toLowerCase().indexOf(q)<0)return false;if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&!isDelivered(o)&&((+o.dep||0)+(+o.pay2||0))>0;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
+  var q=(($('ordQ')||{}).value||'').trim().toLowerCase();var l=orders.filter(function(o){if(q&&(o.name+' '+(o.phone||'')+' '+(o.addr||'')+' '+lab(o)).toLowerCase().indexOf(q)<0)return false;if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&!isDelivered(o)&&!o.ex&&((+o.dep||0)+(+o.pay2||0))>0;if(tab=='wait')return o.st=='open'&&!isDelivered(o)&&!o.ex;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
   $('list').innerHTML=l.length?l.map(function(o){
     var done=o.st=='done',bad=done&&rem(o)>0,good=done&&rem(o)<=0;return '<div class="o'+(bad?' red':good?' grn':'')+'" onclick="openForm('+o.id+')"><div class="t"><span class="n">#'+esc(lab(o))+'</span><b style="flex:1">'+esc(o.name||'بدون اسم')+'</b>'+
     (o.img?'<img src="'+o.img+'" onclick="event.stopPropagation();showImg('+o.id+')">':'')+
@@ -267,7 +270,17 @@ if(!secs.some(function(x){return x.id=='exec'}))secs.push({id:'exec',name:'ال�
 secs=secs.filter(function(x){return PROT[x.id]});
 var secEdit=false,secConf=null;
 function saveSecs(){try{localStorage.setItem('sections_v1',JSON.stringify(secs))}catch(e){}}
-function view(v){['home','sec','orders','att','wk','trn','dr','pt','pd','cn','cd','ms','md','ins','usr','chk','stk','exp','jobs','exec'].forEach(function(k){$('v_'+k).style.display=k==v?'block':'none'});['att','trn','pnt','cnc','wood','insp','exp'].forEach(function(k){$('wipe_'+k).style.display='none'});window.scrollTo(0,0)}
+var VSTACK=[],curView='home',navFromPop=false;
+function navPush(v){if(navFromPop||v===curView)return;VSTACK.push(curView);try{history.pushState({v:v},'')}catch(e){}curView=v}
+window.addEventListener('popstate',function(){
+  var ov=document.querySelector('.ov.on');
+  if(ov){ov.classList.remove('on');try{history.pushState({v:curView},'')}catch(e){};return}
+  if(!VSTACK.length){try{history.pushState({v:curView},'')}catch(e){};return}
+  var prev=VSTACK.pop();navFromPop=true;
+  try{if(prev=='home'){goHome()}else{view(prev)}}finally{navFromPop=false;curView=prev}
+});
+try{history.replaceState({v:'home'},'')}catch(e){}
+function view(v){navPush(v);['home','sec','orders','att','wk','trn','dr','pt','pd','cn','cd','ms','md','ins','usr','chk','stk','exp','jobs','exec'].forEach(function(k){$('v_'+k).style.display=k==v?'block':'none'});['att','trn','pnt','cnc','wood','insp','exp'].forEach(function(k){$('wipe_'+k).style.display='none'});window.scrollTo(0,0)}
 function goHome(){view('home');renderHome()}
 function renderHome(){$('secGrid').innerHTML=secs.filter(function(s){return canSee(s.id)}).map(function(s){return '<div class="sc" data-id="'+s.id+'" onclick="openSec(this.dataset.id)"><div style="font-size:34px">'+esc(s.ic)+'</div><div style="margin-top:6px;font-weight:700">'+esc(s.name)+'</div>'+(secEdit&&!PROT[s.id]?'<button class="xb" data-id="'+s.id+'" onclick="event.stopPropagation();delSec(this.dataset.id)">'+(secConf==s.id?'احذف؟':'✕')+'</button>':'')+'</div>'}).join('')}
 function openSec(id){if(secEdit||!canSee(id))return;if(id=='wood'&&stockOnly()){goStkOnly();return}if(id=='orders'){view('orders');render();return}if(id=='att'){goAtt();return}if(id=='trn'){goTrn();return}if(id=='pnt'){goPt();return}if(id=='cnc'){goCn();return}if(id=='wood'){goMs();return}if(id=='insp'){goIns();return}if(id=='usr'){goUsr();return}if(id=='exp'){goExp();return}if(id=='jobs'){goJobs();return}if(id=='exec'){goExec();return}if(id=='chk'){goChk();return}var s=secs.find(function(x){return x.id==id});$('secT').textContent=s.ic+' '+s.name;view('sec')}
@@ -953,7 +966,7 @@ function pickTh(inp,k,mx){var fl=inp.files[0];if(!fl)return;var r=new FileReader
 function nextNo(){var s='';try{s=localStorage.getItem('start_v1')||''}catch(e){}var used=function(l){return orders.some(function(x){return lab(x)==l})};if(s&&!used(s))return s;if(!orders.length)return '1';var last=orders.reduce(function(a,x){return x.id>a.id?x:a}),l=lab(last),g=0;do{var m=/^(.*?)(\d+)$/.exec(l);l=m?m[1]+String(parseInt(m[2],10)+1).padStart(m[2].length,'0'):l+'1';g++}while(used(l)&&g<1000);return l}
 function setStart(v){v=String(v).trim();if(v){try{localStorage.setItem('start_v1',v)}catch(e){}}render()}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function setTab(t){tab=t;['all','open','done','debt','dep'].forEach(function(k){$('t_'+k).className=k==t?'on':''});render()}
+function setTab(t){tab=t;['all','open','done','debt','dep','wait'].forEach(function(k){$('t_'+k).className=k==t?'on':''});render()}
 var pay='full';
 function setSt(s){st=s;$('s_open').className=s=='open'?'on':'';$('s_done').className=s=='done'?'on':'';$('doneBox').style.display=s=='done'?'block':'none'}
 function setPay(p){pay=p;$('p_full').className=p=='full'?'on':'';$('p_debt').className=p=='debt'?'on':'';$('debtBox').style.display=p=='debt'?'block':'none'}
