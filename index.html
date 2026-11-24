@@ -236,12 +236,13 @@ var $=function(i){return document.getElementById(i)};
 function f(n){return (Math.round(n*100)/100).toLocaleString('en-US')}
 function v(i){return parseFloat($(i).value)||0}
 function rem(o){return o.total-o.dep-o.pay2}
+function isDelivered(o){if(o.st=='done')return true;return STG.some(function(s){return /تسليم/.test(s.name)&&o.stg&&o.stg[s.id]})}
 function render(){
   var tot=0,dep=0,op=0,rm=0,pr=0;
   orders.forEach(function(o){tot+=o.total;if(o.st=='done'&&rem(o)>0)rm+=rem(o);
-    if(o.st=='open'){op++;dep+=o.dep+o.pay2}});
+    if(o.st=='open'&&!isDelivered(o)){op++;dep+=(+o.dep||0)+(+o.pay2||0)}});
   $('sTotal').textContent=f(tot);$('sDep').textContent=f(dep);$('sOpen').textContent=op;$('startNo').value=nextNo();applyTh();renderHome();$('sRem').textContent=f(rm);
-  var q=(($('ordQ')||{}).value||'').trim().toLowerCase();var l=orders.filter(function(o){if(q&&(o.name+' '+(o.phone||'')+' '+(o.addr||'')+' '+lab(o)).toLowerCase().indexOf(q)<0)return false;if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&((+o.dep||0)+(+o.pay2||0))>0;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
+  var q=(($('ordQ')||{}).value||'').trim().toLowerCase();var l=orders.filter(function(o){if(q&&(o.name+' '+(o.phone||'')+' '+(o.addr||'')+' '+lab(o)).toLowerCase().indexOf(q)<0)return false;if(tab=='all')return true;if(tab=='debt')return o.st=='done'&&rem(o)>0;if(tab=='dep')return o.st=='open'&&!isDelivered(o)&&((+o.dep||0)+(+o.pay2||0))>0;return o.st==tab}).slice().sort(function(a,b){return lab(b).localeCompare(lab(a),undefined,{numeric:true})});
   $('list').innerHTML=l.length?l.map(function(o){
     var done=o.st=='done',bad=done&&rem(o)>0,good=done&&rem(o)<=0;return '<div class="o'+(bad?' red':good?' grn':'')+'" onclick="openForm('+o.id+')"><div class="t"><span class="n">#'+esc(lab(o))+'</span><b style="flex:1">'+esc(o.name||'بدون اسم')+'</b>'+
     (o.img?'<img src="'+o.img+'" onclick="event.stopPropagation();showImg('+o.id+')">':'')+
